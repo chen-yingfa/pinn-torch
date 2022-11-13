@@ -17,6 +17,11 @@ def calc_grad(y, x) -> Tensor:
 
 
 class Pinn(nn.Module):
+    """
+    `forward`: returns a tensor of shape (D, 3), where D is the number of
+    data points, and the 2nd dim. is the predicted values of p, u, v.
+    """
+
     def __init__(self, hidden_dims: List[int]):
         super().__init__()
         self.hidden_dims = hidden_dims
@@ -62,45 +67,38 @@ class Pinn(nn.Module):
         u_pred = calc_grad(psi, y)
         v_pred = -calc_grad(psi, x)
 
-        outputs = {
-            "p": p_pred,
-            "u": u_pred,
-            "v": v_pred,
+        preds = torch.stack([p_pred, u_pred, v_pred], dim=1)
+        u_t = calc_grad(u_pred, t)
+        u_x = calc_grad(u_pred, x)
+        u_y = calc_grad(u_pred, y)
+        u_xx = calc_grad(u_x, x)
+        u_yy = calc_grad(u_y, y)
+
+        v_t = calc_grad(v_pred, t)
+        v_x = calc_grad(v_pred, x)
+        v_y = calc_grad(v_pred, y)
+        v_xx = calc_grad(v_x, x)
+        v_yy = calc_grad(v_y, y)
+
+        p_x = calc_grad(p_pred, x)
+        p_y = calc_grad(p_pred, y)
+
+        f_u = (
+            self.lambda1 * (u_t + u_pred * u_x + v_pred * u_y)
+            + p_x
+            - self.lambda2 * (u_xx + u_yy)
+        )
+        f_v = (
+            self.lambda1 * (v_t + u_pred * v_x + v_pred * v_y)
+            - self.lambda1 * 9.81
+            + p_y
+            - self.lambda2 * (v_xx + v_yy)
+        )
+        loss = self.loss_fn(u, v, u_pred, v_pred, f_u, f_v)
+        return {
+            "preds": preds,
+            "loss": loss,
         }
-
-        if any(label is None for label in [p, u, v]):
-            return outputs
-        else:
-            u_t = calc_grad(u_pred, t)
-            u_x = calc_grad(u_pred, x)
-            u_y = calc_grad(u_pred, y)
-            u_xx = calc_grad(u_x, x)
-            u_yy = calc_grad(u_y, y)
-
-            v_t = calc_grad(v_pred, t)
-            v_x = calc_grad(v_pred, x)
-            v_y = calc_grad(v_pred, y)
-            v_xx = calc_grad(v_x, x)
-            v_yy = calc_grad(v_y, y)
-
-            p_x = calc_grad(p_pred, x)
-            p_y = calc_grad(p_pred, y)
-
-            f_u = (
-                u_t
-                + self.lambda1 * (u_pred * u_x + v_pred * u_y)
-                + p_x
-                - self.lambda2 * (u_xx + u_yy)
-            )
-            f_v = (
-                v_t
-                + self.lambda1 * (u_pred * v_x + v_pred * v_y)
-                + p_y
-                - self.lambda2 * (v_xx + v_yy)
-            )
-            loss = self.loss_fn(u, v, u_pred, v_pred, f_u, f_v)
-            outputs["loss"] = loss
-            return outputs
 
     def loss_fn(self, u, v, u_pred, v_pred, f_u_pred, f_v_pred):
         """
