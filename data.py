@@ -1,4 +1,4 @@
-from typing import List, Tuple
+from typing import List
 from pathlib import Path
 import random
 import json
@@ -91,6 +91,10 @@ def get_orig_dataset():
 
     min_x = np.min(x)
     max_x = np.max(x)
+
+    NOISE_SCALE = 0.1
+    u += NOISE_SCALE * np.std(u) * np.random.randn(*u.shape)
+    v += NOISE_SCALE * np.std(v) * np.random.randn(*v.shape)
 
     train_data = np.hstack((t, x, y, p, u, v))
     # Randomly sample 1000 points as test data

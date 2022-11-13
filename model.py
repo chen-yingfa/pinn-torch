@@ -33,8 +33,11 @@ class Pinn(nn.Module):
         self.ffn_layers = []
         input_dim = 3
         for hidden_dim in hidden_dims:
-            self.ffn_layers.append(nn.Linear(input_dim, hidden_dim))
-            self.ffn_layers.append(nn.Tanh())
+            self.ffn_layers += [
+                nn.Linear(input_dim, hidden_dim),
+                nn.Tanh(),
+                nn.Dropout(0.1),
+            ]
             input_dim = hidden_dim
         self.ffn_layers.append(nn.Linear(input_dim, 2))
         self.ffn = nn.Sequential(*self.ffn_layers)
@@ -90,7 +93,7 @@ class Pinn(nn.Module):
         p_x = calc_grad(p_pred, x)
         p_y = calc_grad(p_pred, y)
 
-        # This is the original implementation
+        # This is the original implementation (I think this is incorrect)
         f_u = (
             u_t
             + self.lambda1 * (u_pred * u_x + v_pred * u_y)

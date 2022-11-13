@@ -1,11 +1,14 @@
-from pathlib import Path
+# from pathlib import Path
 import random
 
 import numpy as np
 import torch
 
 from model import Pinn
-from data import get_dataset, get_orig_dataset
+from data import (
+    # get_dataset,
+    get_orig_dataset,
+)
 from trainer import Trainer
 
 
@@ -54,7 +57,7 @@ def main():
     train_data, test_data, min_x, max_x = get_orig_dataset()
 
     # Model
-    hidden_dims = [20] * 8
+    hidden_dims = [100] * 8
     model = Pinn(hidden_dims, min_x, max_x)
     num_params = sum(p.numel() for p in model.parameters())
     print(f"Number of parameters: {num_params}")
@@ -67,8 +70,8 @@ def main():
 
     lambda1 = trainer.model.lambda1.item()
     lambda2 = trainer.model.lambda2.item()
-    print('lambda 1:', lambda1)
-    print('lambda 2:', lambda2)
+    print("lambda 1:", lambda1)
+    print("lambda 2:", lambda2)
     loss = outputs["loss"]
     preds = outputs["preds"]
     process_test_result(test_data, loss, preds, lambda1, lambda2)

@@ -14,17 +14,17 @@ class Trainer:
         self.model = model
 
         # Hyperparameters
-        self.lr = 0.01
+        self.lr = 0.005
         self.lr_step = 1  # Unit is epoch
         self.lr_gamma = 0.8
-        self.num_epochs = 6
+        self.num_epochs = 20
         self.batch_size = 128
         self.log_interval = 1
         self.samples_per_ep = 5000
 
         self.output_dir = Path(
             "result",
-            f"pinn-orig-bs{self.batch_size}-lr{self.lr}-lrstep{self.lr_step}"
+            f"pinn-wide-bs{self.batch_size}-lr{self.lr}-lrstep{self.lr_step}"
             f"-lrgamma{self.lr_gamma}-epoch{self.num_epochs}",
         )
 
@@ -47,7 +47,7 @@ class Trainer:
             return None
         return sorted(ckpts)[-1]
 
-    def train(self, train_data: PinnDataset, do_resume: bool = False):
+    def train(self, train_data: PinnDataset, do_resume: bool = True):
         model = self.model
         device = self.device
 
