@@ -1,5 +1,3 @@
-from typing import List
-
 import torch
 from torch import nn, autograd, Tensor
 from torch.nn import functional as F
