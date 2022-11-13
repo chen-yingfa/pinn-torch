@@ -14,17 +14,17 @@ class Trainer:
         self.model = model
 
         # Hyperparameters
-        self.lr = 1e-3
+        self.lr = 0.01
         self.lr_step = 1  # Unit is epoch
-        self.lr_gamma = 0.5
+        self.lr_gamma = 0.8
         self.num_epochs = 6
-        self.batch_size = 1024
+        self.batch_size = 128
         self.log_interval = 1
-        self.samples_per_ep = 20000
+        self.samples_per_ep = 5000
 
         self.output_dir = Path(
             "result",
-            f"pinn-bs{self.batch_size}-lr{self.lr}-lrstep{self.lr_step}"
+            f"pinn-orig-bs{self.batch_size}-lr{self.lr}-lrstep{self.lr_step}"
             f"-lrgamma{self.lr_gamma}-epoch{self.num_epochs}",
         )
 
@@ -36,9 +36,9 @@ class Trainer:
         dump_json(self.output_dir / "args.json", args)
 
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
-        self.optimizer = torch.optim.Adam(self.model.parameters(), lr=1e-3)
+        self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.lr)
         self.lr_scheduler = torch.optim.lr_scheduler.StepLR(
-            self.optimizer, step_size=100, gamma=0.5
+            self.optimizer, step_size=1, gamma=self.lr_gamma
         )
 
     def get_last_ckpt_dir(self) -> Path:
@@ -47,7 +47,7 @@ class Trainer:
             return None
         return sorted(ckpts)[-1]
 
-    def train(self, train_data: PinnDataset):
+    def train(self, train_data: PinnDataset, do_resume: bool = False):
         model = self.model
         device = self.device
 
@@ -66,21 +66,15 @@ class Trainer:
         print(f"# samples used per epoch: {self.samples_per_ep}")
         print(f"batch size: {self.batch_size}")
         print(f"# steps: {len(train_loader)}")
-        loss_history = []
+        self.loss_history = []
         model.train()
         model.to(device)
 
         # Resume
         last_ckpt_dir = self.get_last_ckpt_dir()
-        if last_ckpt_dir is not None:
+        if do_resume and last_ckpt_dir is not None:
             print(f"Resuming from {last_ckpt_dir}")
-            model.load_state_dict(torch.load(last_ckpt_dir / "ckpt.pt"))
-            self.optimizer.load_state_dict(
-                torch.load(last_ckpt_dir / "optimizer.pt")
-            )
-            self.lr_scheduler.load_state_dict(
-                torch.load(last_ckpt_dir / "lr_scheduler.pt")
-            )
+            self.load_ckpt(last_ckpt_dir)
             ep = int(last_ckpt_dir.name.split("-")[-1]) + 1
         else:
             ep = 0
@@ -94,7 +88,7 @@ class Trainer:
                 # Forward
                 outputs = model(**inputs)
                 loss = outputs["loss"]
-                loss_history.append(loss.item())
+                self.loss_history.append(loss.item())
 
                 # Backward
                 loss.backward()
@@ -117,6 +111,7 @@ class Trainer:
             self.lr_scheduler.step()
             self.checkpoint(ep)
             print(f"====== Epoch {ep} done ======")
+            ep += 1
         print("====== Training done ======")
 
     def checkpoint(self, ep: int):
@@ -138,6 +133,16 @@ class Trainer:
         )
         dump_json(ckpt_dir / "loss_history.json", self.loss_history)
         self.loss_history = []
+
+    def load_ckpt(self, ckpt_dir: Path):
+        print(f'Loading checkpoint from "{ckpt_dir}"')
+        self.model.load_state_dict(torch.load(ckpt_dir / "ckpt.pt"))
+        self.optimizer.load_state_dict(
+            torch.load(ckpt_dir / "optimizer.pt")
+        )
+        self.lr_scheduler.load_state_dict(
+            torch.load(ckpt_dir / "lr_scheduler.pt")
+        )
 
     def predict(self, test_data: PinnDataset) -> dict:
         batch_size = self.batch_size * 32

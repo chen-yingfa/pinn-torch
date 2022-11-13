@@ -5,7 +5,7 @@ import numpy as np
 import torch
 
 from model import Pinn
-from data import get_dataset
+from data import get_dataset, get_orig_dataset
 from trainer import Trainer
 
 
@@ -16,9 +16,11 @@ def process_test_result(
     lambda1: int,
     lambda2: int,
 ):
-    p = test_data[:, 3]
-    u = test_data[:, 4]
-    v = test_data[:, 5]
+    preds = preds.detach().cpu().numpy()
+    test_arr = np.array(test_data.data)
+    p = test_arr[:, 3]
+    u = test_arr[:, 4]
+    v = test_arr[:, 5]
     p_pred = preds[:, 0]
     u_pred = preds[:, 1]
     v_pred = preds[:, 2]
@@ -46,24 +48,27 @@ def main():
     device = "cuda" if torch.cuda.is_available() else "cpu"
     print(f"Using device: {device}")
 
+    # Data
+    # data_path = Path("E:/donny/code/family/00/data/data.jsonl")
+    # train_data, test_data, min_x, max_x = get_dataset(data_path)
+    train_data, test_data, min_x, max_x = get_orig_dataset()
+
     # Model
     hidden_dims = [20] * 8
-    model = Pinn(hidden_dims=hidden_dims)
+    model = Pinn(hidden_dims, min_x, max_x)
     num_params = sum(p.numel() for p in model.parameters())
     print(f"Number of parameters: {num_params}")
 
-    # Data
-    data_path = Path("E:/donny/code/family/00/data/data.jsonl")
-    train_data, test_data = get_dataset(data_path)
-
     trainer = Trainer(model)
     trainer.train(train_data)
+    ckpt_dir = trainer.get_last_ckpt_dir()
+    trainer.load_ckpt(ckpt_dir)
     outputs = trainer.predict(test_data)
 
-    lambda1 = trainer.model.lambda1.item().cpu().detach()
-    lambda2 = trainer.model.lambda2.item().cpu().detach()
-    print(lambda1)
-    print(lambda2)
+    lambda1 = trainer.model.lambda1.item()
+    lambda2 = trainer.model.lambda2.item()
+    print('lambda 1:', lambda1)
+    print('lambda 2:', lambda2)
     loss = outputs["loss"]
     preds = outputs["preds"]
     process_test_result(test_data, loss, preds, lambda1, lambda2)

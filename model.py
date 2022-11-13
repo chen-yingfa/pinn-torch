@@ -22,8 +22,13 @@ class Pinn(nn.Module):
     data points, and the 2nd dim. is the predicted values of p, u, v.
     """
 
-    def __init__(self, hidden_dims: List[int]):
+    def __init__(self, hidden_dims: List[int], min_x: int, max_x: int):
         super().__init__()
+
+        self.MIN_X = min_x
+        self.MAX_X = max_x
+
+        # Build FFN network
         self.hidden_dims = hidden_dims
         self.ffn_layers = []
         input_dim = 3
@@ -42,7 +47,7 @@ class Pinn(nn.Module):
     def init_weights(self):
         for m in self.modules():
             if isinstance(m, nn.Linear):
-                nn.init.xavier_uniform_(m.weight)
+                nn.init.xavier_normal_(m.weight)
                 nn.init.constant_(m.bias, 0.0)
 
     def forward(
@@ -61,6 +66,8 @@ class Pinn(nn.Module):
         labels: p, u, v
         """
         inputs = torch.stack([x, y, t], dim=1)
+        inputs = 2.0 * (inputs - self.MIN_X) / (self.MAX_X - self.MIN_X) - 1.0
+
         hidden_output = self.ffn(inputs)
         psi = hidden_output[:, 0]
         p_pred = hidden_output[:, 1]
@@ -83,17 +90,33 @@ class Pinn(nn.Module):
         p_x = calc_grad(p_pred, x)
         p_y = calc_grad(p_pred, y)
 
+        # This is the original implementation
         f_u = (
-            self.lambda1 * (u_t + u_pred * u_x + v_pred * u_y)
+            u_t
+            + self.lambda1 * (u_pred * u_x + v_pred * u_y)
             + p_x
             - self.lambda2 * (u_xx + u_yy)
         )
         f_v = (
-            self.lambda1 * (v_t + u_pred * v_x + v_pred * v_y)
-            - self.lambda1 * 9.81
+            v_t
+            + self.lambda1 * (u_pred * v_x + v_pred * v_y)
             + p_y
             - self.lambda2 * (v_xx + v_yy)
         )
+
+        # # Corrected
+        # f_u = (
+        #     self.lambda1 * (u_t + u_pred * u_x + v_pred * u_y)
+        #     + p_x
+        #     - self.lambda2 * (u_xx + u_yy)
+        # )
+        # f_v = (
+        #     self.lambda1 * (v_t + u_pred * v_x + v_pred * v_y)
+        #     - self.lambda1 * 9.81
+        #     + p_y
+        #     - self.lambda2 * (v_xx + v_yy)
+        # )
+
         loss = self.loss_fn(u, v, u_pred, v_pred, f_u, f_v)
         return {
             "preds": preds,
@@ -107,9 +130,9 @@ class Pinn(nn.Module):
         p: (b, 1)
         """
         loss = (
-            F.mse_loss(u, u_pred, reduction="sum")
-            + F.mse_loss(v, v_pred, reduction="sum")
-            + F.mse_loss(f_u_pred, torch.zeros_like(f_u_pred), reduction="sum")
-            + F.mse_loss(f_v_pred, torch.zeros_like(f_v_pred), reduction="sum")
+            F.mse_loss(u, u_pred)
+            + F.mse_loss(v, v_pred)
+            + F.mse_loss(f_u_pred, torch.zeros_like(f_u_pred))
+            + F.mse_loss(f_v_pred, torch.zeros_like(f_v_pred))
         )
         return loss
