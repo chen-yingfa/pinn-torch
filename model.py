@@ -20,7 +20,7 @@ class FfnBlock(nn.Module):
         inter_dim = 4 * dim
         self.fc1 = nn.Linear(dim, inter_dim)
         self.fc2 = nn.Linear(inter_dim, dim)
-        self.act_fn = nn.GELU()
+        self.act_fn = nn.Tanh()
         self.dropout = nn.Dropout(0.1)
 
     def forward(self, x):
@@ -53,8 +53,8 @@ class Pinn(nn.Module):
             FfnBlock(self.hidden_dim) for _ in range(self.num_blocks)
         ])
 
-        self.lambda1 = nn.Parameter(torch.tensor(0.0))
-        self.lambda2 = nn.Parameter(torch.tensor(0.0))
+        self.lambda1 = nn.Parameter(torch.tensor(1.0))
+        self.lambda2 = nn.Parameter(torch.tensor(0.01))
 
         self.init_weights()
 
@@ -138,10 +138,11 @@ class Pinn(nn.Module):
             - self.lambda2 * (v_xx + v_yy)
         )
 
-        loss = self.loss_fn(u, v, u_pred, v_pred, f_u, f_v)
+        loss, losses = self.loss_fn(u, v, u_pred, v_pred, f_u, f_v)
         return {
             "preds": preds,
             "loss": loss,
+            "losses": losses,
         }
 
     def loss_fn(self, u, v, u_pred, v_pred, f_u_pred, f_v_pred):
@@ -150,10 +151,14 @@ class Pinn(nn.Module):
         v: (b, 1)
         p: (b, 1)
         """
-        loss = (
-            F.mse_loss(u, u_pred)
-            + F.mse_loss(v, v_pred)
-            + F.mse_loss(f_u_pred, torch.zeros_like(f_u_pred))
-            + F.mse_loss(f_v_pred, torch.zeros_like(f_v_pred))
-        )
-        return loss
+        u_loss = F.mse_loss(u_pred, u)
+        v_loss = F.mse_loss(v_pred, v)
+        f_u_loss = F.mse_loss(f_u_pred, torch.zeros_like(f_u_pred))
+        f_v_loss = F.mse_loss(f_v_pred, torch.zeros_like(f_v_pred))
+        loss = u_loss + v_loss + f_u_loss + f_v_loss
+        return loss, {
+            "u_loss": u_loss,
+            "v_loss": v_loss,
+            "f_u_loss": f_u_loss,
+            "f_v_loss": f_v_loss,
+        }

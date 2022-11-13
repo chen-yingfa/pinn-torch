@@ -9,24 +9,39 @@ from data import dump_json, PinnDataset
 
 
 class Trainer:
-    '''Trainer for convenient training and testing'''
-    def __init__(self, model: Pinn):
+    """Trainer for convenient training and testing"""
+
+    def __init__(
+        self,
+        model: Pinn,
+        output_dir: Path = None,
+        lr: float = 0.001,
+        num_epochs: int = 40,
+        batch_size: int = 128,
+    ):
         self.model = model
 
         # Hyperparameters
-        self.lr = 0.005
-        self.lr_step = 1  # Unit is epoch
+        self.lr = lr
+        self.lr_step = 5  # Unit is epoch
         self.lr_gamma = 0.8
-        self.num_epochs = 20
-        self.batch_size = 128
+        self.num_epochs = num_epochs
+        self.batch_size = batch_size
         self.log_interval = 1
         self.samples_per_ep = 5000
-
-        self.output_dir = Path(
-            "result",
-            f"pinn-large-bs{self.batch_size}-lr{self.lr}-lrstep{self.lr_step}"
-            f"-lrgamma{self.lr_gamma}-epoch{self.num_epochs}",
-        )
+        
+        if output_dir is None:
+            self.output_dir = Path(
+                "result",
+                "pinn-large-tanh",
+                f"bs{batch_size}"
+                f"-lr{lr}"
+                f"-lrstep{self.lr_step}"
+                f"-lrgamma{self.lr_gamma}"
+                f"-epoch{self.num_epochs}",
+            )
+        else:
+            self.output_dir = output_dir
 
         print(f"Output dir: {self.output_dir}")
         self.output_dir.mkdir(parents=True, exist_ok=True)
@@ -42,10 +57,11 @@ class Trainer:
         )
 
     def get_last_ckpt_dir(self) -> Path:
-        ckpts = list(self.output_dir.glob("ckpt-*"))
-        if len(ckpts) == 0:
+        ckpt_dirs = list(self.output_dir.glob("ckpt-*"))
+        ckpt_dirs.sort(key=lambda x: int(x.name.split("-")[-1]))
+        if len(ckpt_dirs) == 0:
             return None
-        return sorted(ckpts)[-1]
+        return ckpt_dirs[-1]
 
     def train(self, train_data: PinnDataset, do_resume: bool = True):
         model = self.model
@@ -97,6 +113,7 @@ class Trainer:
                 self.optimizer.zero_grad()
 
                 if step % self.log_interval == 0:
+                    losses = outputs["losses"]
                     print(
                         {
                             "step": step,
@@ -106,6 +123,10 @@ class Trainer:
                             ),
                             "lambda1": round(self.model.lambda1.item(), 4),
                             "lambda2": round(self.model.lambda2.item(), 4),
+                            "u_loss": round(losses["u_loss"].item(), 6),
+                            "v_loss": round(losses["v_loss"].item(), 6),
+                            "f_u_loss": round(losses["f_u_loss"].item(), 6),
+                            "f_v_loss": round(losses["f_v_loss"].item(), 6),
                             "time": round(time() - train_start_time, 1),
                         }
                     )
@@ -138,9 +159,7 @@ class Trainer:
     def load_ckpt(self, ckpt_dir: Path):
         print(f'Loading checkpoint from "{ckpt_dir}"')
         self.model.load_state_dict(torch.load(ckpt_dir / "ckpt.pt"))
-        self.optimizer.load_state_dict(
-            torch.load(ckpt_dir / "optimizer.pt")
-        )
+        self.optimizer.load_state_dict(torch.load(ckpt_dir / "optimizer.pt"))
         self.lr_scheduler.load_state_dict(
             torch.load(ckpt_dir / "lr_scheduler.pt")
         )
@@ -168,6 +187,6 @@ class Trainer:
         all_preds = torch.cat(all_preds, 0)
         loss = sum(all_losses) / len(all_losses)
         return {
-            'loss': loss,
-            'preds': all_preds,
+            "loss": loss,
+            "preds": all_preds,
         }

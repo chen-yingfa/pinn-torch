@@ -1,4 +1,4 @@
-# from pathlib import Path
+from pathlib import Path
 import random
 
 import numpy as np
@@ -29,15 +29,19 @@ def process_test_result(
     v_pred = preds[:, 2]
 
     # Error
-    err_u = np.linalg.norm(u - u_pred, 2) / np.linalg.norm(u, 2)
-    err_v = np.linalg.norm(v - v_pred, 2) / np.linalg.norm(v, 2)
-    err_p = np.linalg.norm(p - p_pred, 2) / np.linalg.norm(p, 2)
+    # err_u = np.linalg.norm(u - u_pred, 2) / np.linalg.norm(u, 2)
+    # err_v = np.linalg.norm(v - v_pred, 2) / np.linalg.norm(v, 2)
+    # err_p = np.linalg.norm(p - p_pred, 2) / np.linalg.norm(p, 2)
+    err_u = np.mean(np.abs((u - u_pred) / u))
+    err_v = np.mean(np.abs((v - v_pred) / v))
+    err_p = np.mean(np.abs((p - p_pred) / p))
 
     err_lambda1 = np.abs(lambda1 - 1.0)
     err_lambda2 = np.abs(lambda2 - 0.01) / 0.01
 
-    print(f"Error in velocity: {err_u:.2e}, {err_v:.2e}")
-    print(f"Error in pressure: {err_p:.2e}")
+    print(f"Error in u: {err_u:.4e}")
+    print(f"Error in v: {err_v:.4e}")
+    print(f"Error in pressure: {err_p:.4e}")
     print(f"Error in lambda 1: {err_lambda1:.2f}")
     print(f"Error in lambda 2: {err_lambda2:.2f}")
 
@@ -48,6 +52,8 @@ def process_test_result(
 def main():
     torch.random.manual_seed(0)
     random.seed(0)
+    np.random.seed(0)
+
     device = "cuda" if torch.cuda.is_available() else "cpu"
     print(f"Using device: {device}")
 
@@ -63,7 +69,9 @@ def main():
     print(f"Number of parameters: {num_params}")
 
     # Train
-    trainer = Trainer(model)
+    output_dir = Path(
+        "result\pinn-large-tanh-bs128-lr0.005-lrstep1-lrgamma0.8-epoch20")
+    trainer = Trainer(model, output_dir)
     trainer.train(train_data)
 
     # Test
