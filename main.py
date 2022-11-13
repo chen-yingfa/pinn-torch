@@ -57,17 +57,21 @@ def main():
     train_data, test_data, min_x, max_x = get_orig_dataset()
 
     # Model
-    hidden_dims = [100] * 8
-    model = Pinn(hidden_dims, min_x, max_x)
+    # hidden_dims = [128, 128, 128, 128, 128, 128, 128, 128]
+    model = Pinn(min_x, max_x)
     num_params = sum(p.numel() for p in model.parameters())
     print(f"Number of parameters: {num_params}")
 
+    # Train
     trainer = Trainer(model)
     trainer.train(train_data)
+
+    # Test
     ckpt_dir = trainer.get_last_ckpt_dir()
     trainer.load_ckpt(ckpt_dir)
     outputs = trainer.predict(test_data)
 
+    # Test Result
     lambda1 = trainer.model.lambda1.item()
     lambda2 = trainer.model.lambda2.item()
     print("lambda 1:", lambda1)

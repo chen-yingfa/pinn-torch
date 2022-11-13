@@ -24,7 +24,7 @@ class Trainer:
 
         self.output_dir = Path(
             "result",
-            f"pinn-wide-bs{self.batch_size}-lr{self.lr}-lrstep{self.lr_step}"
+            f"pinn-large-bs{self.batch_size}-lr{self.lr}-lrstep{self.lr_step}"
             f"-lrgamma{self.lr_gamma}-epoch{self.num_epochs}",
         )
 
@@ -61,6 +61,7 @@ class Trainer:
         )
 
         print("====== Training ======")
+        print(f'device is "{device}"')
         print(f"# epochs: {self.num_epochs}")
         print(f"# examples: {len(train_data)}")
         print(f"# samples used per epoch: {self.samples_per_ep}")

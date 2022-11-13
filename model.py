@@ -16,31 +16,44 @@ def calc_grad(y, x) -> Tensor:
     return grad
 
 
+class FfnBlock(nn.Module):
+    def __init__(self, dim):
+        super().__init__()
+        inter_dim = 4 * dim
+        self.fc1 = nn.Linear(dim, inter_dim)
+        self.fc2 = nn.Linear(inter_dim, dim)
+        self.act_fn = nn.GELU()
+        self.dropout = nn.Dropout(0.1)
+
+    def forward(self, x):
+        x0 = x
+        x = self.fc1(x)
+        x = self.act_fn(x)
+        x = self.fc2(x)
+        x = self.dropout(x)
+        return x + x0
+
+
 class Pinn(nn.Module):
     """
     `forward`: returns a tensor of shape (D, 3), where D is the number of
     data points, and the 2nd dim. is the predicted values of p, u, v.
     """
 
-    def __init__(self, hidden_dims: List[int], min_x: int, max_x: int):
+    def __init__(self, min_x: int, max_x: int):
         super().__init__()
 
         self.MIN_X = min_x
         self.MAX_X = max_x
 
         # Build FFN network
-        self.hidden_dims = hidden_dims
-        self.ffn_layers = []
-        input_dim = 3
-        for hidden_dim in hidden_dims:
-            self.ffn_layers += [
-                nn.Linear(input_dim, hidden_dim),
-                nn.Tanh(),
-                nn.Dropout(0.1),
-            ]
-            input_dim = hidden_dim
-        self.ffn_layers.append(nn.Linear(input_dim, 2))
-        self.ffn = nn.Sequential(*self.ffn_layers)
+        self.hidden_dim = 128
+        self.num_blocks = 8
+        self.first_map = nn.Linear(3, self.hidden_dim)
+        self.last_map = nn.Linear(self.hidden_dim, 2)
+        self.ffn_blocks = nn.ModuleList([
+            FfnBlock(self.hidden_dim) for _ in range(self.num_blocks)
+        ])
 
         self.lambda1 = nn.Parameter(torch.tensor(0.0))
         self.lambda2 = nn.Parameter(torch.tensor(0.0))
@@ -52,6 +65,13 @@ class Pinn(nn.Module):
             if isinstance(m, nn.Linear):
                 nn.init.xavier_normal_(m.weight)
                 nn.init.constant_(m.bias, 0.0)
+
+    def ffn(self, inputs: Tensor) -> Tensor:
+        x = self.first_map(inputs)
+        for blk in self.ffn_blocks:
+            x = blk(x)
+        x = self.last_map(x)
+        return x
 
     def forward(
         self,
@@ -94,31 +114,31 @@ class Pinn(nn.Module):
         p_y = calc_grad(p_pred, y)
 
         # This is the original implementation (I think this is incorrect)
-        f_u = (
-            u_t
-            + self.lambda1 * (u_pred * u_x + v_pred * u_y)
-            + p_x
-            - self.lambda2 * (u_xx + u_yy)
-        )
-        f_v = (
-            v_t
-            + self.lambda1 * (u_pred * v_x + v_pred * v_y)
-            + p_y
-            - self.lambda2 * (v_xx + v_yy)
-        )
-
-        # # Corrected
         # f_u = (
-        #     self.lambda1 * (u_t + u_pred * u_x + v_pred * u_y)
+        #     u_t
+        #     + self.lambda1 * (u_pred * u_x + v_pred * u_y)
         #     + p_x
         #     - self.lambda2 * (u_xx + u_yy)
         # )
         # f_v = (
-        #     self.lambda1 * (v_t + u_pred * v_x + v_pred * v_y)
-        #     - self.lambda1 * 9.81
+        #     v_t
+        #     + self.lambda1 * (u_pred * v_x + v_pred * v_y)
         #     + p_y
         #     - self.lambda2 * (v_xx + v_yy)
         # )
+
+        # # Corrected
+        f_u = (
+            self.lambda1 * (u_t + u_pred * u_x + v_pred * u_y)
+            + p_x
+            - self.lambda2 * (u_xx + u_yy)
+        )
+        f_v = (
+            self.lambda1 * (v_t + u_pred * v_x + v_pred * v_y)
+            - self.lambda1 * 9.81
+            + p_y
+            - self.lambda2 * (v_xx + v_yy)
+        )
 
         loss = self.loss_fn(u, v, u_pred, v_pred, f_u, f_v)
         return {
