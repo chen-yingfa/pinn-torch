@@ -65,3 +65,14 @@ python main.py
 - `trainer.py`: A `Trainer` class, for more convenient training and testing
 
 Right now, most hyperparameters are hard-coded in `Trainer` class (in `trainer.py`) and in the `Pinn` class (in `model.py`).
+
+## How to Cite?
+
+```bibtex
+@misc{chen2022pinn-torch
+    title={PINN (Physics-Informed Neural Networks) on Navier-Stokes Equations},
+    authors={Yingfa Chen},
+    year={2025},
+    url={https://github.com/chen-yingfa/pinn-torch},
+}
+```
